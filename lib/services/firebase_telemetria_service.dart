@@ -77,6 +77,7 @@ class FirebaseTelemetriaService {
   Timer? _retryTimer;
   DateTime _lastEmit = DateTime.fromMillisecondsSinceEpoch(0);
   List<ColectivoActivo> _raw = const [];
+  List<ColectivoActivo> _simulados = const [];
   bool _readFailed = false;
   bool _readLoaded = false;
   int _serverOffsetMs = 0;
@@ -149,10 +150,19 @@ class FirebaseTelemetriaService {
     DateTime ahora,
   ) => raw.where((c) => !c.isStale(ahora)).toList(growable: false);
 
+  /// Actualiza los colectivos simulados en movimiento para demostración en el
+  /// mapa.
+  void setSimulados(List<ColectivoActivo> simulados) {
+    _simulados = List.unmodifiable(simulados);
+    if (simulados.isNotEmpty) _readLoaded = true;
+    _emit();
+  }
+
   /// Fija la flota sin tocar la red. Sólo para tests.
   @visibleForTesting
   void debugSetColectivos(List<ColectivoActivo> colectivos) {
     _raw = colectivos;
+    _simulados = const [];
     _readLoaded = true;
     _emit();
   }
@@ -171,8 +181,15 @@ class FirebaseTelemetriaService {
 
   void _emit() {
     _lastEmit = DateTime.now();
+    final reales = vigentes(_raw, serverNow());
     _state.value = TelemetriaState(
-      colectivos: vigentes(_raw, serverNow()),
+      colectivos: _simulados.isEmpty
+          ? reales
+          : [
+              ...reales,
+              for (final s in _simulados)
+                if (reales.every((r) => r.uid != s.uid)) s,
+            ],
       failed: _readFailed,
       loaded: _readLoaded,
     );
@@ -217,7 +234,6 @@ class FirebaseTelemetriaService {
 
   bool get isTracking => _isTracking;
   ColectivoActivo? get current => _current;
-  EstadoCapacidad get estado => _current?.estado ?? EstadoCapacidad.disponible;
 
   /// Empieza a transmitir la posición de este chofer.
   ///
@@ -229,7 +245,6 @@ class FirebaseTelemetriaService {
     required String uid,
     required String patente,
     required String garitaId,
-    EstadoCapacidad estado = EstadoCapacidad.disponible,
     String? recorridoId,
     String? recorridoNombre,
   }) async {
@@ -242,7 +257,6 @@ class FirebaseTelemetriaService {
       garitaId: garitaId,
       latitud: 0,
       longitud: 0,
-      estado: estado,
       recorridoId: recorridoId,
       recorridoNombre: recorridoNombre,
     );
@@ -306,14 +320,6 @@ class FirebaseTelemetriaService {
     } else if (_isTracking) {
       SessionLogService.instance.logEvent('NETWORK_LOST');
     }
-  }
-
-  /// Cambia la capacidad reportada sin esperar al siguiente arreglo de GPS.
-  Future<void> setEstado(EstadoCapacidad estado) async {
-    final actual = _current;
-    if (actual == null) return;
-    _current = actual.copyWith(estado: estado);
-    if (_isTracking) await _publicar();
   }
 
   /// Cambia la línea que el chofer dice estar cubriendo; `null` la quita.

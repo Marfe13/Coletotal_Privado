@@ -21,7 +21,6 @@ import 'package:taxi1/services/turno_service.dart';
 import 'package:taxi1/theme/app_colors.dart';
 import 'package:taxi1/theme/app_spacing.dart';
 import 'package:taxi1/utils/distance_format.dart';
-import 'package:taxi1/utils/estado_format.dart';
 import 'package:taxi1/utils/patente.dart';
 import 'package:taxi1/utils/tile_coords.dart';
 import 'package:taxi1/widgets/app_map.dart';
@@ -84,6 +83,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// caminando hasta ella: sólo quería ver la ficha.
   String? _sinCaminata;
 
+  /// UID del colectivo tocado en el mapa (Modo Foco en vehículo y su línea).
+  String? _colectivoSeleccionadoUid;
+
   late final AnimationController _centerBtnController;
   late final Animation<double> _centerScale;
 
@@ -130,6 +132,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// el administrador borró), el viaje se cierra.
   void _onRecorridosChanged() {
     final linea = recorridos.selected;
+    if (linea == null) {
+      _colectivoSeleccionadoUid = null;
+    }
     final viaje = _viaje;
     if (viaje != null && linea?.id != viaje.recorrido.id) {
       _viaje = null;
@@ -242,7 +247,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   /// dibuja entera, con su punto de seña, y el mapa la muestra completa. Si el
   /// punto de seña le queda a mano, también al pasajero.
   void _onTapVariante(Recorrido elegida) {
-    setState(() => _followUser = false);
+    setState(() {
+      _colectivoSeleccionadoUid = null;
+      _followUser = false;
+    });
     recorridos.select(elegida);
     final sena = _senas.where((s) => s.sentido == _sentidoSena).firstOrNull;
     final desde = location.position;
@@ -355,6 +363,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     setState(() {
       _destino = null;
       _viaje = null;
+      _colectivoSeleccionadoUid = null;
     });
     routeService.clearDestination();
     recorridos.clearSelection();
@@ -380,20 +389,38 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       _mapController.resetBearing(animate: prefs.animationsEnabled);
 
   Future<void> _onTapColectivo(ColectivoActivo colectivo) async {
-    // Si informa una línea, se dibuja. Salvo con un viaje armado: dibujar otra
-    // línea lo cerraría, y sólo se quería ver la ficha del colectivo.
-    if (_viaje == null) {
-      if (colectivo.recorridoId case final id?) {
-        final linea = recorridos.byId(id);
-        if (linea != null) {
-          _sinCaminata = linea.id;
-          recorridos.select(linea);
-          _sinCaminata = null;
-        }
-      }
-    }
-    if (!mounted) return;
+    final id = colectivo.recorridoId;
+    final linea = id == null ? null : recorridos.byId(id);
+    final yaEnFoco =
+        _colectivoSeleccionadoUid == colectivo.uid &&
+        recorridos.selected?.id == linea?.id &&
+        linea != null;
 
+    // Al tocar un colectivo con ruta asignada (sin viaje armado), aislamos su
+    // línea, expandimos el radio de esa línea a 2 km y ajustamos la cámara para
+    // ver tanto la ruta completa como el vehículo sin tapar el mapa con un
+    // modal. Un segundo toque sobre el mismo vehículo abre su ficha detallada.
+    if (_viaje == null && linea != null && !yaEnFoco) {
+      setState(() {
+        _colectivoSeleccionadoUid = colectivo.uid;
+        _followUser = false;
+      });
+      _sinCaminata = linea.id;
+      recorridos.select(linea);
+      _sinCaminata = null;
+      final sena = _senas.where((s) => s.sentido == _sentidoSena).firstOrNull;
+      final desde = location.position;
+      unawaited(
+        _encuadrar([
+          for (final (_, t) in linea.trayectos) ...t.trazado,
+          LatLng(colectivo.latitud, colectivo.longitud),
+          if (desde != null && sena != null && _aMano(sena)) desde,
+        ]),
+      );
+      return;
+    }
+
+    if (!mounted) return;
     final ahora = FirebaseTelemetriaService.instance.serverNow();
     await showModalBottomSheet<void>(
       context: context,
@@ -418,6 +445,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             style: mapStyle,
             lineas: lineas,
             lugares: _lugares(lineas),
+            centroMapa: _centroMapa,
+            colectivoSeleccionadoUid: _colectivoSeleccionadoUid,
             linea: linea,
             sentido: recorridos.selectedSentido,
             viaje: viaje,
@@ -573,12 +602,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             linea: linea,
             senas: _senas,
             sentido: _sentidoSena,
+            colectivoSeleccionado: _colectivoSeleccionadoUid == null
+                ? null
+                : FirebaseTelemetriaService.instance.state.value.colectivos
+                      .where((c) => c.uid == _colectivoSeleccionadoUid)
+                      .firstOrNull,
             metrosDesdeTi: _senas
                 .where((s) => s.sentido == _sentidoSena)
                 .map((s) => _metrosDesdeUsuario(s.punto))
                 .firstOrNull,
             routeInfo: routeService.routeInfo,
-            onClose: recorridos.clearSelection,
+            onClose: () {
+              setState(() => _colectivoSeleccionadoUid = null);
+              recorridos.clearSelection();
+            },
             onSwitch: _cambiarSentidoSena,
             onTap: () {
               final sena = _senas
@@ -680,6 +717,8 @@ class _MapaPasajero extends StatelessWidget {
     required this.style,
     required this.lineas,
     required this.lugares,
+    required this.centroMapa,
+    required this.colectivoSeleccionadoUid,
     required this.linea,
     required this.sentido,
     required this.viaje,
@@ -698,15 +737,20 @@ class _MapaPasajero extends StatelessWidget {
   final AppMapController controller;
   final MapStyle style;
 
-  /// Las líneas que ve el pasajero. No se dibujan: cada variante es un ícono
-  /// fijo, y sólo la que se toca se dibuja.
+  /// Las líneas activas de la garita.
   final List<Recorrido> lineas;
 
   /// Dónde va el ícono de cada una, por id (ver
   /// [PuntosDeSena.lugaresDeIconos]).
   final Map<String, LatLng> lugares;
 
-  /// La elegida, la única que se dibuja.
+  /// Último centro de la cámara cuando el usuario explora el mapa sin GPS.
+  final LatLng? centroMapa;
+
+  /// UID del colectivo tocado para mantenerlo visible en Modo Foco.
+  final String? colectivoSeleccionadoUid;
+
+  /// La línea en foco, si el usuario tocó un colectivo o eligió un recorrido.
   final Recorrido? linea;
 
   /// Sentido de [linea] a dibujar, o `null` para los dos.
@@ -758,14 +802,35 @@ class _MapaPasajero extends StatelessWidget {
             position != null && !(auth.isColectivero && turno.enTurno);
 
         final ahora = telemetria.serverNow();
-        final colectivos = colectivosVisibles(
-          telemetria.state.value.colectivos,
-          position ?? kQuilpueCenter,
-        );
-
         final linea = this.linea;
         final viaje = this.viaje;
         final destino = this.destino;
+        final centroProximidad = position ?? centroMapa ?? kQuilpueCenter;
+
+        // En Modo Radar (sin línea seleccionada): colectivos en un radio de
+        // 1 km. En Modo Foco (con línea seleccionada): colectivos de esa misma
+        // línea en un radio del doble (2 km).
+        final colectivos = colectivosEnRadio(
+          telemetria.state.value.colectivos,
+          centroProximidad,
+          radioKm: linea != null
+              ? kRadioLineaSeleccionadaKm
+              : kRadioRutasCercanasKm,
+          recorridoId: linea?.id,
+          incluirUid: colectivoSeleccionadoUid,
+        );
+
+        // En Modo Radar se cargan automáticamente las rutas de los colectivos
+        // cercanos (dentro de 1 km); si entra uno nuevo se carga su línea, y si
+        // sale desaparece.
+        final rutasCercanas = linea == null && viaje == null
+            ? recorridosDeColectivos(
+                colectivos,
+                lineas,
+                centro: centroProximidad,
+              )
+            : const <Recorrido>[];
+
         final senaElegida = senas
             .where((s) => s.sentido == sentidoSena)
             .firstOrNull;
@@ -781,9 +846,18 @@ class _MapaPasajero extends StatelessWidget {
           onUserGesture: onUserGesture,
           onBearingChanged: onBearingChanged,
           lines: [
-            // Sólo la línea elegida (o el sentido del viaje). Va debajo de la
-            // ruta a pie: es contexto, no la indicación que el usuario tiene
-            // que seguir ahora.
+            // Modo Radar (1 km): dibuja las líneas de los colectivos cercanos.
+            if (linea == null && viaje == null)
+              for (final r in rutasCercanas)
+                ...recorridoLines(
+                  r,
+                  status,
+                  badge: true,
+                  arrows: false,
+                  onTap: () => onTapVariante(r),
+                ),
+            // Modo Foco (vehículo o línea seleccionada): sólo esa línea, con
+            // flechas e insignias.
             if (linea != null)
               ...recorridoLines(
                 linea,
@@ -877,15 +951,7 @@ class _MapaPasajero extends StatelessWidget {
                 onTap: () => avisar(l10n.alightHere),
               ),
             ],
-            // Un ícono fijo por variante, donde va más sola, en vez de todos
-            // los recorridos encimados: tocarlo la dibuja. Sin el de la
-            // elegida, que ya muestra sus puntos de seña, y sin ninguno con un
-            // viaje armado.
-            if (viaje == null)
-              for (final r in lineas)
-                if (r.id != linea?.id)
-                  if (lugares[r.id] case final lugar?)
-                    _iconoVariante(r, lugar, l10n),
+
             // La línea elegida: el punto de seña de cada sentido (uno solo si
             // los dos pasan por el mismo lugar).
             for (final (sena, ambos) in _senasAMostrar(senas, sentidoSena))
@@ -928,25 +994,6 @@ class _MapaPasajero extends StatelessWidget {
     );
   }
 
-  /// El ícono de una variante: "10 T" en su color. Si otro ya ocupa su lugar
-  /// (con el mapa muy alejado), MapLibre lo esconde hasta que se acerque.
-  MapMarker _iconoVariante(Recorrido r, LatLng lugar, AppLocalizations l10n) {
-    final color = Color(r.colorValue).withValues(alpha: 1);
-    final etiqueta = PuntosDeSena.etiqueta(r);
-    return MapMarker(
-      id: 'variante_${r.id}',
-      point: lugar,
-      icon: HailBadge(
-        label: etiqueta,
-        detail: '',
-        color: color,
-        textColor: AppStatusColors.onColorFor(color),
-      ),
-      collides: true,
-      semanticLabel: l10n.hailLineTitle(etiqueta),
-      onTap: () => onTapVariante(r),
-    );
-  }
 
   MapMarker _iconoSentido(
     PuntoDeSena sena, {
@@ -1028,7 +1075,11 @@ class _ColectivoSheet extends StatelessWidget {
     final theme = Theme.of(context);
     final status = AppStatusColors.of(context);
     final offline = colectivo.seemsOffline(ahora);
-    final estadoColor = status.forEstado(colectivo.estado);
+    final id = colectivo.recorridoId;
+    final linea = id == null ? null : RecorridosService.instance.byId(id);
+    final estadoColor = linea != null
+        ? Color(linea.colorValue).withValues(alpha: 1)
+        : status.disponible;
     final antiguedad = colectivo.antiguedad(ahora);
 
     return SafeArea(
@@ -1086,8 +1137,8 @@ class _ColectivoSheet extends StatelessWidget {
               children: [
                 MetricChip(
                   icon: Icons.circle,
-                  label: estadoLabel(colectivo.estado, l10n, detallado: true),
-                  color: estadoColor,
+                  label: l10n.turnoOn,
+                  color: status.disponible,
                 ),
                 if (offline)
                   MetricChip(
@@ -1161,6 +1212,7 @@ class _SenaCard extends StatelessWidget {
     required this.linea,
     required this.senas,
     required this.sentido,
+    this.colectivoSeleccionado,
     required this.metrosDesdeTi,
     required this.routeInfo,
     required this.onClose,
@@ -1171,6 +1223,7 @@ class _SenaCard extends StatelessWidget {
   final Recorrido linea;
   final List<PuntoDeSena> senas;
   final Sentido? sentido;
+  final ColectivoActivo? colectivoSeleccionado;
 
   /// A cuánto queda del pasajero el punto de seña elegido (`null` sin GPS).
   final double? metrosDesdeTi;
@@ -1252,6 +1305,12 @@ class _SenaCard extends StatelessWidget {
               runSpacing: AppSpacing.xs,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                if (colectivoSeleccionado case final col?)
+                  MetricChip(
+                    icon: Icons.directions_car,
+                    label: l10n.colectivoTitle(formatPatente(col.idVehiculo)),
+                    color: color,
+                  ),
                 // Cerca, lo que se camina; lejos (o sin GPS), a cuánto pasa.
                 if (routeInfo case final info?)
                   MetricChip(

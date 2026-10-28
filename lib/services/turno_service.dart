@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:taxi1/models/app_user.dart';
-import 'package:taxi1/models/colectivo_activo.dart';
 import 'package:taxi1/models/recorrido.dart';
 import 'package:taxi1/services/auth_service.dart';
 import 'package:taxi1/services/firebase_telemetria_service.dart';
@@ -53,13 +52,11 @@ class TurnoService extends ChangeNotifier {
   final _recorridos = RecorridosService.instance;
 
   bool _enTurno = false;
-  EstadoCapacidad _estado = EstadoCapacidad.disponible;
   TurnoIssue _issue = TurnoIssue.none;
   bool _busy = false;
   String? _recorridoId;
 
   bool get enTurno => _enTurno;
-  EstadoCapacidad get estado => _estado;
   TurnoIssue get issue => _issue;
   bool get busy => _busy;
 
@@ -222,7 +219,6 @@ class TurnoService extends ChangeNotifier {
         uid: profile.uid,
         patente: profile.patente ?? profile.uid,
         garitaId: profile.garitaId,
-        estado: _estado,
         recorridoId: recorrido?.id,
         recorridoNombre: recorrido?.nombre,
       );
@@ -269,16 +265,6 @@ class TurnoService extends ChangeNotifier {
       _busy = false;
       notifyListeners();
     }
-  }
-
-  Future<void> setEstado(EstadoCapacidad estado) async {
-    if (estado == _estado) return;
-    _estado = estado;
-    notifyListeners();
-    SessionLogService.instance.logEvent('STATE_CHANGED', {
-      'estado': estado.wireName,
-    });
-    await _telemetria.setEstado(estado);
   }
 
   /// Fija si hay turno sin GPS ni Firebase. Sólo para tests de pantallas.

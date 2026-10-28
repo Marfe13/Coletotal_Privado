@@ -149,6 +149,13 @@ void main() {
       expect(() => patenteToEmail('AB12'), throwsArgumentError);
     });
 
+    test('permite múltiples conductores con cuentas separadas para una misma patente', () {
+      expect(patenteToEmail('BBCC12', conductor: 1), 'bbcc12@chofer.coletotal.app');
+      expect(patenteToEmail('BBCC12', conductor: 2), 'bbcc12.c2@chofer.coletotal.app');
+      expect(patenteToEmail('BBCC12', conductor: 3), 'bbcc12.c3@chofer.coletotal.app');
+      expect(() => patenteToEmail('BBCC12', conductor: 4), throwsRangeError);
+    });
+
     test('formatPatente separa el bloque de letras del de dígitos', () {
       expect(formatPatente('BBBB12'), 'BBBB·12');
       expect(formatPatente('AB1234'), 'AB·1234');
@@ -228,7 +235,6 @@ void main() {
         'longitud': -71.4425,
       });
       expect(viejo.uid, 'chofer_abc123');
-      expect(viejo.estado, EstadoCapacidad.disponible);
       expect(viejo.isStale(), isFalse, reason: 'sin ts no se puede afirmar');
     });
 
@@ -254,23 +260,11 @@ void main() {
         idVehiculo: 'BBCC12',
         latitud: -33.0,
         longitud: -71.0,
-        estado: EstadoCapacidad.lleno,
       );
       final json = c.toJson();
       expect(json.containsKey('ts'), isFalse);
       expect(json['uid'], 'u1');
-      expect(json['estado'], 'lleno');
-    });
-
-    test('el estado viaja con un nombre estable', () {
-      for (final estado in EstadoCapacidad.values) {
-        expect(EstadoCapacidad.fromWire(estado.wireName), estado);
-      }
-      expect(
-        EstadoCapacidad.fromWire('otra-cosa'),
-        EstadoCapacidad.disponible,
-        reason: 'ante la duda, la unidad se muestra disponible',
-      );
+      expect(json.containsKey('estado'), isFalse);
     });
   });
 }

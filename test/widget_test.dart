@@ -153,14 +153,6 @@ void main() {
       }
     });
 
-    test('"medio lleno" no se confunde con el amarillo del tema oscuro', () {
-      final amarillo = buildAppTheme(brightness: Brightness.dark).colorScheme;
-      final tono = HSVColor.fromColor(AppStatusColors.dark.medioLleno).hue;
-      expect(
-        (HSVColor.fromColor(amarillo.primary).hue - tono).abs(),
-        greaterThan(15),
-      );
-    });
 
     test('la barra de navegación del sistema sigue a la de pestañas', () {
       for (final brightness in Brightness.values) {

@@ -1,6 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
 import 'package:taxi1/config/garita_config.dart';
+import 'package:taxi1/models/colectivo_activo.dart';
 import 'package:taxi1/models/recorrido.dart';
 import 'package:taxi1/services/recorridos_service.dart';
 import 'package:taxi1/utils/polyline.dart';
@@ -40,7 +41,35 @@ class LineSuggestion {
   double get metrosAPie => metrosHastaLinea + metrosDesdeLinea;
 }
 
-/// Elige qué colectivo tomar para llegar a un destino.
+/// Métricas de proximidad y flota activa de un [Recorrido] para su
+/// priorización en la pestaña Recorridos.
+class LineaPriorizada {
+  const LineaPriorizada({
+    required this.linea,
+    required this.metros,
+    required this.enServicio,
+    required this.metrosColectivoMasCercano,
+  });
+
+  final Recorrido linea;
+
+  /// Distancia mínima desde la ubicación del pasajero al trazado (`null` sin GPS).
+  final double? metros;
+
+  /// Cantidad de colectivos en turno asignados a esta línea.
+  final int enServicio;
+
+  /// Distancia al colectivo activo más cercano de esta línea (`null` sin GPS o sin unidades).
+  final double? metrosColectivoMasCercano;
+}
+
+/// Punto de extensión desacoplado para ordenar recorridos (permite conectar un
+/// algoritmo de recorrido óptimo sin acoplar la interfaz).
+typedef LineRankingStrategy =
+    int Function(LineaPriorizada a, LineaPriorizada b);
+
+/// Elige qué colectivo tomar para llegar a un destino y prioriza las líneas por
+/// cercanía al pasajero.
 ///
 /// Los colectivos no tienen paraderos: paran donde se les hace la seña. Así
 /// que para cada línea y cada sentido se busca el punto del recorrido más
@@ -60,6 +89,78 @@ abstract final class LinePlanner {
   /// subida y la bajada quedan casi en el mismo punto, el destino está más
   /// cerca a pie que en colectivo.
   static const double minEnColectivo = 150;
+
+  /// Estrategia de ranking configurable para la pestaña Recorridos. Por omisión
+  /// usa [compararPorProximidad]; puede reemplazarse por un algoritmo de
+  /// recorrido óptimo más adelante.
+  static LineRankingStrategy rankingStrategy = compararPorProximidad;
+
+  /// Compara dos líneas priorizando de la más cercana a la más lejana a la
+  /// ubicación actual del pasajero, desempatando por el colectivo activo más
+  /// cercano y unidades en servicio.
+  static int compararPorProximidad(LineaPriorizada a, LineaPriorizada b) {
+    final ma = a.metros;
+    final mb = b.metros;
+    if (ma != null || mb != null) {
+      final da = ma ?? double.infinity;
+      final db = mb ?? double.infinity;
+      if ((da - db).abs() > 1.0) {
+        return da.compareTo(db);
+      }
+      final ca = a.metrosColectivoMasCercano ?? double.infinity;
+      final cb = b.metrosColectivoMasCercano ?? double.infinity;
+      final cmpColectivo = ca.compareTo(cb);
+      if (cmpColectivo != 0) return cmpColectivo;
+    }
+    final cmpServicio = b.enServicio.compareTo(a.enServicio);
+    if (cmpServicio != 0) return cmpServicio;
+    return a.linea.nombre.compareTo(b.linea.nombre);
+  }
+
+  /// Calcula las métricas de cercanía y ordena [lineas] según [strategy] (o
+  /// [rankingStrategy] por omisión).
+  static List<LineaPriorizada> priorizarLineas({
+    required List<Recorrido> lineas,
+    required List<ColectivoActivo> colectivos,
+    LatLng? posicion,
+    LineRankingStrategy? strategy,
+  }) {
+    const distance = Distance();
+    final validos = colectivos
+        .where((c) => !(c.latitud == 0.0 && c.longitud == 0.0))
+        .toList(growable: false);
+
+    final resultado = [
+      for (final linea in lineas)
+        () {
+          final deLinea = validos
+              .where((c) => c.recorridoId == linea.id)
+              .toList(growable: false);
+          double? masCercano;
+          if (posicion != null && deLinea.isNotEmpty) {
+            for (final c in deLinea) {
+              final d = distance.as(
+                LengthUnit.Meter,
+                posicion,
+                LatLng(c.latitud, c.longitud),
+              );
+              if (masCercano == null || d < masCercano) {
+                masCercano = d;
+              }
+            }
+          }
+          return LineaPriorizada(
+            linea: linea,
+            metros: posicion == null ? null : metrosHasta(linea, posicion),
+            enServicio: deLinea.length,
+            metrosColectivoMasCercano: masCercano,
+          );
+        }(),
+    ];
+
+    resultado.sort(strategy ?? rankingStrategy);
+    return resultado;
+  }
 
   /// Las mejores formas de ir de [user] a [destino], de menos a más caminata,
   /// con a lo más una por línea (la de su mejor sentido).

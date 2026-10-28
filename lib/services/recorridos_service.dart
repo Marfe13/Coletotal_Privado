@@ -100,8 +100,8 @@ class RecorridosService extends ChangeNotifier {
   /// Dibuja [recorrido] en el mapa: entero, o sólo [sentido].
   ///
   /// Con [encuadrar], el mapa además mueve la cámara para mostrarla completa:
-  /// lo pide la pestaña Líneas. Tocar un colectivo en el mapa no lo pide,
-  /// porque alejaría la cámara del colectivo que se acaba de tocar.
+  /// lo pide la pestaña Líneas. Tocar un colectivo en el mapa calcula su propio
+  /// encuadre combinado (ruta completa + vehículo).
   void select(Recorrido recorrido, {Sentido? sentido, bool encuadrar = false}) {
     final misma = _selected?.id == recorrido.id && _selectedSentido == sentido;
     if (misma && !encuadrar) return;

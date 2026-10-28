@@ -8,7 +8,6 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:taxi1/config/map_config.dart';
 import 'package:taxi1/l10n/app_localizations.dart';
 import 'package:taxi1/models/app_user.dart';
-import 'package:taxi1/models/colectivo_activo.dart';
 import 'package:taxi1/models/recorrido.dart';
 import 'package:taxi1/navigation/app_destination.dart';
 import 'package:taxi1/screens/main_screen.dart';
@@ -37,10 +36,9 @@ import 'package:taxi1/widgets/state_views.dart';
 ///
 /// Fuera de turno, la cámara lo sigue con el norte arriba y abajo está el
 /// botón grande de "Iniciar turno". En turno, la cámara se inclina y gira con
-/// el sentido de marcha, como en Google Maps, y abajo quedan sólo los controles
-/// que se tocan manejando: la capacidad (un toque) y "Terminar turno". Su línea
-/// va resaltada, con las flechas de su sentido, y los demás colectivos a la
-/// vista.
+/// el sentido de marcha, como en Google Maps, y abajo quedan el selector de
+/// línea y el botón "Terminar turno". Su línea va resaltada, con las flechas
+/// de su sentido, y los demás colectivos a la vista.
 class TurnoScreen extends StatefulWidget {
   const TurnoScreen({super.key});
 
@@ -558,63 +556,34 @@ class _TurnoScreenState extends State<TurnoScreen> {
     );
   }
 
-  /// En turno, una sola fila: la capacidad como tres píldoras de semáforo,
-  /// que se tocan manejando, y un botón cuadrado para terminar.
-  ///
-  /// La píldora elegida se rellena con su color; las otras llevan un punto
-  /// del suyo. Sin íconos dentro de la elegida, el texto cabe entero: en un
-  /// teléfono de 384 dp cada píldora mide unos 90 px.
+  /// En turno, una sola fila: la línea asignada y el botón para terminar el
+  /// turno (con confirmación previa para evitar cierres accidentales).
   Widget _panelEnTurno(AppLocalizations l10n) {
-    final scheme = Theme.of(context).colorScheme;
-    final status = AppStatusColors.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final issue = _issueMessage(l10n);
-
-    Widget pildora(EstadoCapacidad estado, String texto, Color color) =>
-        Expanded(
-          child: _PildoraCapacidad(
-            texto: texto,
-            color: color,
-            elegida: _turno.estado == estado,
-            onTap: () => _turno.setEstado(estado),
-          ),
-        );
 
     return _TarjetaInferior(
       aviso: issue,
       child: Row(
         children: [
-          pildora(
-            EstadoCapacidad.disponible,
-            l10n.capacityAvailable,
-            status.disponible,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          pildora(
-            EstadoCapacidad.medioLleno,
-            l10n.capacityHalf,
-            status.medioLleno,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          pildora(EstadoCapacidad.lleno, l10n.capacityFull, status.lleno),
+          Expanded(child: _chipLinea(l10n)),
           const SizedBox(width: AppSpacing.sm),
-          // Terminar el turno pide confirmación: es un botón chico al lado de
-          // los que se tocan manejando, y un toque de más sacaría al colectivo
-          // del mapa de los pasajeros.
-          SizedBox.square(
-            dimension: TurnoScreen.altoControles,
-            child: IconButton.filled(
+          Tooltip(
+            message: l10n.turnoEnd,
+            child: FilledButton.icon(
               onPressed: _turno.busy ? null : () => _confirmarFin(l10n),
-              tooltip: l10n.turnoEnd,
-              style: IconButton.styleFrom(
+              style: FilledButton.styleFrom(
                 backgroundColor: scheme.errorContainer,
                 foregroundColor: scheme.onErrorContainer,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppSpacing.md),
-                ),
+                minimumSize: const Size(0, TurnoScreen.altoControles),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                textStyle: theme.textTheme.titleSmall,
               ),
               icon: _turno.busy
                   ? const _Girando()
-                  : const Icon(Icons.stop_rounded, size: 28),
+                  : const Icon(Icons.stop_rounded, size: 22),
+              label: Text(l10n.turnoEnd),
             ),
           ),
         ],
@@ -666,35 +635,38 @@ class _TurnoScreenState extends State<TurnoScreen> {
           constraints: const BoxConstraints(
             minHeight: TurnoScreen.altoControles,
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.circle,
-                  size: 12,
-                  color: recorrido == null
-                      ? scheme.outline
-                      : Color(recorrido.colorValue),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    recorrido?.nombre ??
-                        (opciones.isEmpty
-                            ? l10n.turnoRouteEmpty
-                            : l10n.turnoRouteNone),
-                    style: theme.textTheme.titleSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (opciones.isNotEmpty) const Icon(Icons.arrow_drop_down),
-              ],
-            ),
-          ),
         ),
       ),
+    )._withChild(
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        child: Row(
+          children: [
+            Icon(
+              Icons.circle,
+              size: 12,
+              color: recorrido == null
+                  ? scheme.outline
+                  : Color(recorrido.colorValue),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                recorrido?.nombre ??
+                    (opciones.isEmpty
+                        ? l10n.turnoRouteEmpty
+                        : l10n.turnoRouteNone),
+                style: theme.textTheme.titleSmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (opciones.isNotEmpty) const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
+      onTap: opciones.isEmpty ? null : () => _pickRecorrido(l10n),
+      scheme: scheme,
     );
   }
 
@@ -750,6 +722,27 @@ class _TurnoScreenState extends State<TurnoScreen> {
   };
 }
 
+extension on Material {
+  Widget _withChild(
+    Widget child, {
+    required VoidCallback? onTap,
+    required ColorScheme scheme,
+  }) => Material(
+    color: scheme.surfaceContainerHighest,
+    shape: const StadiumBorder(),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: TurnoScreen.altoControles,
+        ),
+        child: child,
+      ),
+    ),
+  );
+}
+
 /// La tarjeta de abajo del chofer: flota sobre el mapa con poco margen, para
 /// tapar lo menos posible. Un aviso (GPS, cuenta deshabilitada) va encima de
 /// sus controles.
@@ -778,76 +771,6 @@ class _TarjetaInferior extends StatelessWidget {
           ],
           child,
         ],
-      ),
-    );
-  }
-}
-
-/// Una opción del semáforo de capacidad (informe §7.3.1-C): un solo toque,
-/// como exige el informe, con el estado intermedio que hace útil el semáforo
-/// para la garita.
-///
-/// La elegida va rellena con su color y en negrita; las demás, con un punto de
-/// su color. El texto se achica si no cabe, en vez de partirse en dos líneas.
-class _PildoraCapacidad extends StatelessWidget {
-  const _PildoraCapacidad({
-    required this.texto,
-    required this.color,
-    required this.elegida,
-    required this.onTap,
-  });
-
-  final String texto;
-  final Color color;
-  final bool elegida;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final frente = elegida
-        ? AppStatusColors.onColorFor(color)
-        : scheme.onSurface;
-
-    return Semantics(
-      button: true,
-      selected: elegida,
-      child: Material(
-        color: elegida ? color : scheme.surfaceContainerHighest,
-        shape: const StadiumBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            height: TurnoScreen.altoControles,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (!elegida) ...[
-                    Icon(Icons.circle, size: 10, color: color),
-                    const SizedBox(width: AppSpacing.xs),
-                  ],
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        texto,
-                        maxLines: 1,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: frente,
-                          fontWeight: elegida ? FontWeight.w700 : null,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

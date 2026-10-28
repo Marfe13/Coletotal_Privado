@@ -41,7 +41,6 @@ void main() {
         latitud: -33.0,
         longitud: -71.0,
         garitaId: 'g1',
-        estado: EstadoCapacidad.lleno,
         recorridoId: 'r1',
         recorridoNombre: 'Línea 1',
       );

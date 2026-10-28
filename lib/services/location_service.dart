@@ -64,6 +64,7 @@ class LocationService extends ChangeNotifier with WidgetsBindingObserver {
   final _prefs = PreferencesService.instance;
 
   LatLng? _position;
+  LatLng? _defaultPassengerPosition;
   double? _accuracy;
   double? _speed;
   double? _heading;
@@ -107,6 +108,18 @@ class LocationService extends ChangeNotifier with WidgetsBindingObserver {
   /// `getLastKnownPosition`: la telemetría no debe publicar una posición vieja
   /// como si fuera actual.
   Stream<Position> get positions => _positions.stream;
+
+  /// Fija una ubicación por defecto para el pasajero (p. ej. el centro de
+  /// Quilpué) para poder visualizar de inmediato los vehículos y el radar de
+  /// aparición de recorridos aunque el GPS esté apagado o fuera de la comuna.
+  void setDefaultPassengerPosition(LatLng? position) {
+    _defaultPassengerPosition = position;
+    if (!_driverMode && _wantsStream && _position == null && position != null) {
+      _position = position;
+      _accuracy ??= 15;
+      notifyListeners();
+    }
+  }
 
   /// Abre el GPS según las preferencias. Se llama una vez desde `main()`.
   Future<void> start() async {
@@ -196,6 +209,10 @@ class LocationService extends ChangeNotifier with WidgetsBindingObserver {
 
     final issue = await ensurePermission();
     if (issue != LocationIssue.none) {
+      if (!_driverMode && _defaultPassengerPosition != null) {
+        _position ??= _defaultPassengerPosition;
+        _accuracy ??= 15;
+      }
       _setIssue(issue);
       return;
     }
@@ -294,7 +311,23 @@ class LocationService extends ChangeNotifier with WidgetsBindingObserver {
     // JSON, que no admite NaN.
     if (!lat.isFinite || !lng.isFinite || (lat == 0.0 && lng == 0.0)) return;
 
-    _position = LatLng(lat, lng);
+    final candidato = LatLng(lat, lng);
+    // Si hay una ubicación por defecto de pasajero (centro de Quilpué) y el GPS
+    // reporta una coordenada fuera de la zona (> 10 km, p. ej. emulador en otra
+    // ciudad), se mantiene al pasajero en la ubicación por defecto para probar
+    // los vehículos y el radar de recorridos.
+    if (!_driverMode && _defaultPassengerPosition != null) {
+      final lejos =
+          const Distance().as(
+            LengthUnit.Kilometer,
+            _defaultPassengerPosition!,
+            candidato,
+          ) >
+          10;
+      _position = lejos ? _defaultPassengerPosition : candidato;
+    } else {
+      _position = candidato;
+    }
     _accuracy = p.accuracy;
     _speed = p.speed.isFinite && p.speed >= 0 ? p.speed : null;
     _heading = rumboConfiable(
@@ -324,6 +357,7 @@ class LocationService extends ChangeNotifier with WidgetsBindingObserver {
     if (_started) WidgetsBinding.instance.removeObserver(this);
     _started = false;
     _driverMode = false;
+    _defaultPassengerPosition = null;
     _position = null;
     _accuracy = null;
     _speed = null;
@@ -337,6 +371,7 @@ class LocationService extends ChangeNotifier with WidgetsBindingObserver {
   /// Fija la posición sin GPS. Sólo para tests de pantallas que la usan.
   @visibleForTesting
   void debugSetPosition(LatLng? position, {double? speed, double? heading}) {
+    _defaultPassengerPosition = null;
     _position = position;
     _speed = speed;
     _heading = heading;

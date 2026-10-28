@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:taxi1/models/colectivo_activo.dart';
-
 /// Negro de marca: la carrocería del colectivo chileno.
 const Color kColeTotalInk = Color(0xFF1C1B1A);
 
@@ -10,25 +8,12 @@ const Color kColeTotalYellow = Color(0xFFFFCC00);
 
 /// Paleta de ColeTotal: negro y amarillo de colectivo sobre grises neutros.
 ///
-/// El mapa ya tiene dos escalas de color reservadas que no se pueden pisar:
-///
-///  * **Azul** = "mi ubicación" (convención de Google/Apple Maps, y el punto
-///    del pasajero en [MapScreen] la usa).
-///  * **Verde / ámbar / rojo** = semaforización de capacidad de las unidades,
-///    exigida por el informe (§7.3.1-C "marcadores de semáforos que cambian de
-///    color según la capacidad reportada por los choferes").
-///
-/// Por eso la interfaz es gris neutro y lo único con color sobre el mapa son
-/// los marcadores y las líneas, que son los que significan algo. Lo principal
+/// La interfaz es gris neutro y lo único con color sobre el mapa son los
+/// marcadores y las líneas, que son los que significan algo. Lo principal
 /// (botones, interruptores, títulos de sección) va en negro en el tema claro y
 /// en amarillo en el oscuro; el amarillo marca además lo seleccionado: la
 /// pestaña actual, el recentrado mientras sigue al usuario, los botones
 /// tonales.
-///
-/// Antes toda la paleta salía de una semilla naranja (`0xFFE58A00`) con
-/// [ColorScheme.fromSeed]: teñía de durazno todos los fondos, los botones
-/// salían café (`0xFF855317`) y el naranja se confundía con el ámbar de
-/// "medio lleno".
 ColorScheme buildColorScheme(Brightness brightness) {
   // Fondos, textos y bordes: la rampa de grises de Material 3, sin tinte.
   final neutral = ColorScheme.fromSeed(
@@ -90,8 +75,6 @@ extension MapControlColors on ColorScheme {
 class AppStatusColors extends ThemeExtension<AppStatusColors> {
   const AppStatusColors({
     required this.disponible,
-    required this.medioLleno,
-    required this.lleno,
     required this.distanceVeryClose,
     required this.distanceClose,
     required this.distanceMedium,
@@ -103,12 +86,10 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     required this.markerBorder,
   });
 
-  /// Semaforización de capacidad (informe §7.3.1-C).
+  /// Indicador de unidad o chofer activo / en servicio.
   final Color disponible;
-  final Color medioLleno;
-  final Color lleno;
 
-  /// Escala de proximidad a un paradero. Cuatro tonos claramente distintos
+  /// Escala de proximidad peatonal. Cuatro tonos claramente distintos
   /// entre sí, ninguno azul (reservado para la ubicación del usuario).
   final Color distanceVeryClose;
   final Color distanceClose;
@@ -128,16 +109,6 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   /// Borde de los marcadores sobre el mapa, para separarlos del fondo.
   final Color markerBorder;
 
-  /// Color de la semaforización para la capacidad [estado].
-  ///
-  /// Reemplaza tres `switch` idénticos que vivían en el mapa, en la consola de
-  /// flota y en la ficha del colectivo.
-  Color forEstado(EstadoCapacidad estado) => switch (estado) {
-    EstadoCapacidad.disponible => disponible,
-    EstadoCapacidad.medioLleno => medioLleno,
-    EstadoCapacidad.lleno => lleno,
-  };
-
   /// Color de texto/icono legible sobre [background].
   ///
   /// Evita tener que declarar un `onX` por cada color de estado.
@@ -150,8 +121,6 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   /// (>= 4.5:1) sobre superficies claras.
   static const AppStatusColors light = AppStatusColors(
     disponible: Color(0xFF1B7A3D),
-    medioLleno: Color(0xFFA65A00),
-    lleno: Color(0xFFB3261E),
     distanceVeryClose: Color(0xFF1B7A3D),
     distanceClose: Color(0xFF00796B),
     distanceMedium: Color(0xFFA65A00),
@@ -165,14 +134,8 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
 
   /// Paleta de estado para tema oscuro: los mismos matices, aclarados para
   /// mantener contraste AA sobre superficies oscuras.
-  ///
-  /// El ámbar va corrido hacia el naranja: el ámbar aclarado (`0xFFF5B95C`)
-  /// quedaba casi igual al amarillo de los botones del tema oscuro, y un
-  /// colectivo "medio lleno" no puede leerse como un botón.
   static const AppStatusColors dark = AppStatusColors(
     disponible: Color(0xFF6DD98C),
-    medioLleno: Color(0xFFFFA352),
-    lleno: Color(0xFFF2B8B5),
     distanceVeryClose: Color(0xFF6DD98C),
     distanceClose: Color(0xFF4DD0C1),
     distanceMedium: Color(0xFFFFA352),
@@ -190,8 +153,6 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   @override
   AppStatusColors copyWith({
     Color? disponible,
-    Color? medioLleno,
-    Color? lleno,
     Color? distanceVeryClose,
     Color? distanceClose,
     Color? distanceMedium,
@@ -204,8 +165,6 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   }) {
     return AppStatusColors(
       disponible: disponible ?? this.disponible,
-      medioLleno: medioLleno ?? this.medioLleno,
-      lleno: lleno ?? this.lleno,
       distanceVeryClose: distanceVeryClose ?? this.distanceVeryClose,
       distanceClose: distanceClose ?? this.distanceClose,
       distanceMedium: distanceMedium ?? this.distanceMedium,
@@ -223,8 +182,6 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     if (other is! AppStatusColors) return this;
     return AppStatusColors(
       disponible: Color.lerp(disponible, other.disponible, t)!,
-      medioLleno: Color.lerp(medioLleno, other.medioLleno, t)!,
-      lleno: Color.lerp(lleno, other.lleno, t)!,
       distanceVeryClose: Color.lerp(
         distanceVeryClose,
         other.distanceVeryClose,

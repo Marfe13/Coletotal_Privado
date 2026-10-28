@@ -108,23 +108,18 @@ void main() {
     expect(nav.fix?.heading, 90);
   });
 
-  testWidgets('en turno: navegación inclinada, capacidad de un toque y '
+  testWidgets('en turno: navegación inclinada, recorrido visible y '
       '"Terminar turno"', (tester) async {
     TurnoService.instance.debugSetEnTurno(true);
     await tester.pumpWidget(_app());
     await tester.pump();
 
     expect(find.text('En servicio'), findsOneWidget);
-    // Abajo, una sola fila: las tres píldoras del semáforo y el botón para
-    // terminar, a la misma altura.
     for (final texto in ['Disponible', 'Medio lleno', 'Lleno']) {
-      expect(find.text(texto), findsOneWidget);
+      expect(find.text(texto), findsNothing);
     }
+    expect(find.text('Sin recorrido asignado'), findsOneWidget);
     expect(find.byTooltip('Terminar turno'), findsOneWidget);
-    expect(
-      tester.getCenter(find.byTooltip('Terminar turno')).dy,
-      moreOrLessEquals(tester.getCenter(find.text('Lleno')).dy, epsilon: 1),
-    );
     expect(find.text('Iniciar turno'), findsNothing);
     // Arriba sólo "En servicio": la hora del último envío ya no se muestra.
     expect(find.textContaining('Última posición'), findsNothing);
@@ -156,19 +151,12 @@ void main() {
     expect(find.text('Volver a centrar'), findsNothing);
   });
 
-  testWidgets('la capacidad cambia con un toque y terminar pide confirmación', (
+  testWidgets('terminar turno pide confirmación antes de salir', (
     tester,
   ) async {
     TurnoService.instance.debugSetEnTurno(true);
     await tester.pumpWidget(_app());
     await tester.pump();
-
-    await tester.tap(find.text('Medio lleno'));
-    await tester.pump();
-    expect(TurnoService.instance.estado, EstadoCapacidad.medioLleno);
-    await tester.tap(find.text('Disponible'));
-    await tester.pump();
-    expect(TurnoService.instance.estado, EstadoCapacidad.disponible);
 
     // Un toque en el botón de terminar no termina: pregunta primero.
     await tester.tap(find.byTooltip('Terminar turno'));

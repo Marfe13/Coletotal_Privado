@@ -6,9 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:taxi1/config/garita_config.dart';
 import 'package:taxi1/l10n/app_localizations.dart';
+import 'package:taxi1/models/colectivo_activo.dart';
 import 'package:taxi1/models/recorrido.dart';
 import 'package:taxi1/screens/admin/recorridos_admin_screen.dart';
 import 'package:taxi1/screens/lineas_screen.dart';
+import 'package:taxi1/services/firebase_telemetria_service.dart';
 import 'package:taxi1/services/location_service.dart';
 import 'package:taxi1/services/preferences_service.dart';
 import 'package:taxi1/services/recorridos_service.dart';
@@ -67,6 +69,7 @@ void main() {
 
   tearDown(() {
     RecorridosService.instance.debugSetRecorridos(const []);
+    FirebaseTelemetriaService.instance.debugSetColectivos(const []);
     LocationService.instance.debugSetPosition(null);
   });
 
@@ -91,6 +94,31 @@ void main() {
     // A cuánto pasa, y que la cercana sólo tiene ida.
     expect(find.textContaining('Pasa a 47 m de ti'), findsOneWidget);
     expect(find.textContaining('Sólo ida'), findsOneWidget);
+  });
+
+  testWidgets('a igual distancia al trazado, prioriza la línea con colectivo '
+      'activo más cercano', (tester) async {
+    RecorridosService.instance.debugSetRecorridos([
+      _linea('Variante A', lon: -71.4430),
+      _linea('Variante B', lon: -71.4430),
+    ]);
+    LocationService.instance.debugSetPosition(const LatLng(-33.047, -71.4425));
+    FirebaseTelemetriaService.instance.debugSetColectivos(const [
+      ColectivoActivo(
+        uid: 'c_b',
+        idVehiculo: 'BBCC10',
+        latitud: -33.048,
+        longitud: -71.4430,
+        recorridoId: 'Variante B',
+      ),
+    ]);
+
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+
+    final posB = tester.getTopLeft(find.text('Variante B')).dy;
+    final posA = tester.getTopLeft(find.text('Variante A')).dy;
+    expect(posB, lessThan(posA));
   });
 
   testWidgets('la búsqueda filtra por nombre, sin tildes', (tester) async {

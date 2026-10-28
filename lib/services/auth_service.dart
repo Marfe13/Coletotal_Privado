@@ -316,11 +316,12 @@ class AuthService extends ChangeNotifier {
   Future<void> signInColectivero({
     required String patente,
     required String clave,
+    int conductor = 1,
   }) async {
     if (!isValidPatente(patente)) {
       throw const AuthFailure(AuthErrorCode.patenteInvalida);
     }
-    await _signIn(patenteToEmail(patente), clave);
+    await _signIn(patenteToEmail(patente, conductor: conductor), clave);
   }
 
   Future<void> signInAdministrador({
@@ -368,6 +369,7 @@ class AuthService extends ChangeNotifier {
     required String patente,
     required String clave,
     required String codigo,
+    int conductor = 1,
   }) async {
     if (!isValidPatente(patente)) {
       throw const AuthFailure(AuthErrorCode.patenteInvalida);
@@ -376,7 +378,7 @@ class AuthService extends ChangeNotifier {
     await _register(
       rol: UserRole.colectivero,
       codigo: codigo,
-      email: patenteToEmail(normalizada),
+      email: patenteToEmail(normalizada, conductor: conductor),
       clave: clave,
       build: (uid, acceso) => AppUser(
         uid: uid,

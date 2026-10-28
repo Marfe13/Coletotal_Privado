@@ -43,6 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _codigo = TextEditingController();
 
   late UserRole _role = widget.initialRole;
+  int _conductor = 1;
   bool _submitting = false;
   String? _error;
 
@@ -145,6 +146,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           patente: _identifier.text,
           clave: _password.text,
           codigo: _codigo.text,
+          conductor: _conductor,
         );
       } else {
         await AuthService.instance.registerAdministrador(
@@ -208,11 +210,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
 
-              if (_isDriver)
+              if (_isDriver) ...[
                 PatenteField(
                   controller: _identifier,
                   textInputAction: TextInputAction.next,
-                )
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ConductorSlotSelector(
+                  value: _conductor,
+                  onChanged: (v) => setState(() => _conductor = v),
+                ),
+              ]
               else
                 EmailField(
                   controller: _identifier,

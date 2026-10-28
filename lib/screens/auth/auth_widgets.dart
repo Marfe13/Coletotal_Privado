@@ -45,6 +45,61 @@ class AuthRoleSelector extends StatelessWidget {
   }
 }
 
+/// Selector de cupo de chofer dentro de un mismo vehículo (patente).
+///
+/// Permite que hasta [kMaxConductoresPorPatente] conductores (titular, turno
+/// de relevo, reemplazo) se registren e inicien sesión de forma independiente
+/// usando la misma patente y cada uno con su propia contraseña y nombre.
+class ConductorSlotSelector extends StatelessWidget {
+  const ConductorSlotSelector({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<int>(
+          selected: {value},
+          onSelectionChanged: (s) => onChanged(s.first),
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: 1,
+              icon: Icon(Icons.looks_one_outlined, size: 18),
+              label: Text('Chofer 1'),
+            ),
+            ButtonSegment(
+              value: 2,
+              icon: Icon(Icons.looks_two_outlined, size: 18),
+              label: Text('Chofer 2'),
+            ),
+            ButtonSegment(
+              value: 3,
+              icon: Icon(Icons.looks_3_outlined, size: 18),
+              label: Text('Chofer 3'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Si varios conductores usan el mismo auto, cada uno elige su cupo (Chofer 1, 2 o 3) con su propia clave.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Fuerza mayúsculas mientras se escribe.
 class _UpperCaseFormatter extends TextInputFormatter {
   const _UpperCaseFormatter();

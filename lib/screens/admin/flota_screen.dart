@@ -13,7 +13,6 @@ import 'package:taxi1/services/garita_service.dart';
 import 'package:taxi1/services/recorridos_service.dart';
 import 'package:taxi1/theme/app_colors.dart';
 import 'package:taxi1/theme/app_spacing.dart';
-import 'package:taxi1/utils/estado_format.dart';
 import 'package:taxi1/utils/patente.dart';
 import 'package:taxi1/widgets/app_map.dart';
 import 'package:taxi1/widgets/map_overlay_card.dart';
@@ -22,9 +21,8 @@ import 'package:taxi1/widgets/state_views.dart';
 
 /// Monitoreo de flota en vivo (informe §7.3.1-C).
 ///
-/// Mapa arriba, lista abajo. La semaforización de los marcadores es la que
-/// reporta cada chofer desde su pantalla de turno, así que el administrador
-/// diagnostica la oferta de la línea por color y sin leer nada.
+/// Mapa arriba, lista abajo. Permite al administrador supervisar las unidades
+/// en circulación, la variante que están cubriendo y la vigencia de su señal.
 class FlotaScreen extends StatefulWidget {
   const FlotaScreen({super.key});
 
@@ -116,6 +114,15 @@ class _FlotaScreenState extends State<FlotaScreen> {
       if (c.uid == _selected) return c;
     }
     return null;
+  }
+
+  Color _colorUnidad(ColectivoActivo unidad, AppStatusColors status) {
+    final id = unidad.recorridoId;
+    if (id != null) {
+      final r = _recorridos.byId(id);
+      if (r != null) return Color(r.colorValue);
+    }
+    return status.disponible;
   }
 
   @override
@@ -226,7 +233,8 @@ class _FlotaScreenState extends State<FlotaScreen> {
                         const SizedBox(height: AppSpacing.sm),
                     itemBuilder: (context, index) {
                       final unidad = unidades[index];
-                      final color = status.forEstado(unidad.estado);
+                      final color = _colorUnidad(unidad, status);
+                      final offline = unidad.seemsOffline(ahora);
                       return MapOverlayCard(
                         onTap: () => _focus(unidad),
                         child: Row(
@@ -255,13 +263,13 @@ class _FlotaScreenState extends State<FlotaScreen> {
                                     ),
                                   ],
                                   Text(
-                                    unidad.seemsOffline(ahora)
+                                    offline
                                         ? l10n.colectivoNoSignal
-                                        : estadoLabel(unidad.estado, l10n),
+                                        : l10n.turnoOn,
                                     style: theme.textTheme.bodySmall?.copyWith(
-                                      color: unidad.seemsOffline(ahora)
+                                      color: offline
                                           ? theme.colorScheme.onSurfaceVariant
-                                          : color,
+                                          : status.disponible,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -341,7 +349,7 @@ class _FlotaScreenState extends State<FlotaScreen> {
     required bool selected,
     required bool offline,
   }) {
-    final color = status.forEstado(unidad.estado);
+    final color = _colorUnidad(unidad, status);
     return MapMarker(
       id: unidad.uid,
       point: LatLng(unidad.latitud, unidad.longitud),

@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' show MapLibreMap;
 
 import 'package:taxi1/config/app_version.dart';
+import 'package:taxi1/config/map_config.dart';
 import 'package:taxi1/firebase_options.dart';
 import 'package:taxi1/l10n/app_localizations.dart';
 import 'package:taxi1/screens/main_screen.dart';
@@ -17,6 +18,7 @@ import 'package:taxi1/services/garita_service.dart';
 import 'package:taxi1/services/location_service.dart';
 import 'package:taxi1/services/preferences_service.dart';
 import 'package:taxi1/services/recorridos_service.dart';
+import 'package:taxi1/services/simulacion_flota_service.dart';
 import 'package:taxi1/services/turno_service.dart';
 import 'package:taxi1/services/street_index.dart';
 import 'package:taxi1/theme/app_text_scaler.dart';
@@ -74,6 +76,27 @@ void main() async {
   // La flota en vivo: una sola suscripción para toda la app. Antes cada
   // pantalla (mapa, flota, portada de garita, choferes) abría la suya.
   FirebaseTelemetriaService.instance.startListening();
+
+  // ===========================================================================
+  // NOTA: CONFIGURACIONES DE PRUEBA (FUNCIÓN RADAR DE RUTAS POR PROXIMIDAD)
+  // ---------------------------------------------------------------------------
+  // Para validar y demostrar el muestreo dinámico de recorridos por cercanía
+  // (Modo Radar 1 km / Modo Foco 2 km) sin depender de ubicarse físicamente en
+  // Quilpué ni de tener flota real transmitiendo en ese instante:
+  //   1. `setDefaultPassengerPosition(kQuilpueCenter)` fija la ubicación por
+  //      defecto del pasajero en el centro de Quilpué (-33.0472, -71.4425) si
+  //      el GPS no está disponible o reporta coordenadas fuera de la comuna
+  //      (> 10 km, ej. emulador). En modo conductor usa siempre el GPS real.
+  //   2. `SimulacionFlotaService.instance.start(centro: kQuilpueCenter)`
+  //      inyecta 3 colectivos simulados (BBCC10, DDEE11, FFGG12) circulando
+  //      sobre los trazados reales de las 3 líneas originales de Firestore
+  //      (`linea-10-t`, `linea-10-v1`, `linea-10-v2`), donde `FFGG12` entra y
+  //      sale periódicamente del radio de 1 km por Av. Ricardo Cumming.
+  // Para pruebas de campo exclusivamente con GPS real y flota en vivo, basta
+  // con comentar estas dos líneas.
+  // ===========================================================================
+  LocationService.instance.setDefaultPassengerPosition(kQuilpueCenter);
+  SimulacionFlotaService.instance.start(centro: kQuilpueCenter);
 
   runApp(const ColeTotalApp());
 

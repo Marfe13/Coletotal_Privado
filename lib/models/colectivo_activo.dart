@@ -1,28 +1,5 @@
 import 'dart:math' as math;
 
-/// Capacidad reportada por el chofer.
-///
-/// Es la "semaforización" que pide el informe §7.3.1-C: el administrador
-/// diagnostica de un vistazo la oferta de la línea por el color de los
-/// marcadores. Los tres tonos ya existen en `AppStatusColors`.
-enum EstadoCapacidad {
-  disponible,
-  medioLleno,
-  lleno;
-
-  String get wireName => switch (this) {
-    EstadoCapacidad.disponible => 'disponible',
-    EstadoCapacidad.medioLleno => 'medioLleno',
-    EstadoCapacidad.lleno => 'lleno',
-  };
-
-  static EstadoCapacidad fromWire(String? value) => switch (value) {
-    'medioLleno' => EstadoCapacidad.medioLleno,
-    'lleno' => EstadoCapacidad.lleno,
-    _ => EstadoCapacidad.disponible,
-  };
-}
-
 /// Una unidad transmitiendo su posición en Realtime Database.
 ///
 /// El nodo se guarda en `colectivos_activos/{uid}` — **la clave es el uid de
@@ -36,7 +13,6 @@ class ColectivoActivo {
     required this.latitud,
     required this.longitud,
     this.garitaId = '',
-    this.estado = EstadoCapacidad.disponible,
     this.recorridoId,
     this.recorridoNombre,
     this.conectado = true,
@@ -52,7 +28,6 @@ class ColectivoActivo {
   final String garitaId;
   final double latitud;
   final double longitud;
-  final EstadoCapacidad estado;
 
   /// ID del recorrido que está cubriendo actualmente (ej. 'recorrido-101-valencia-hospital').
   final String? recorridoId;
@@ -123,7 +98,6 @@ class ColectivoActivo {
       garitaId: (json['garitaId'] as String?) ?? '',
       latitud: (json['latitud'] as num).toDouble(),
       longitud: (json['longitud'] as num).toDouble(),
-      estado: EstadoCapacidad.fromWire(json['estado'] as String?),
       recorridoId: json['recorridoId'] as String?,
       recorridoNombre: json['recorridoNombre'] as String?,
       conectado: (json['conectado'] as bool?) ?? true,
@@ -135,16 +109,13 @@ class ColectivoActivo {
   /// servicio, porque `ServerValue.timestamp` es un centinela, no un número.
   ///
   /// Cada clave tiene que estar permitida en `database.rules.json`, que
-  /// rechaza cualquier hijo desconocido. Antes `recorridoId`,
-  /// `recorridoNombre` y `conectado` no lo estaban; lo vigila el test de
-  /// contrato de reglas.
+  /// rechaza cualquier hijo desconocido.
   Map<String, dynamic> toJson() => {
     'uid': uid,
     'idVehiculo': idVehiculo,
     'garitaId': garitaId,
     'latitud': latitud,
     'longitud': longitud,
-    'estado': estado.wireName,
     'recorridoId': ?recorridoId,
     'recorridoNombre': ?recorridoNombre,
     'conectado': conectado,
@@ -155,7 +126,6 @@ class ColectivoActivo {
   ColectivoActivo copyWith({
     double? latitud,
     double? longitud,
-    EstadoCapacidad? estado,
     String? recorridoId,
     String? recorridoNombre,
     bool clearRecorrido = false,
@@ -167,7 +137,6 @@ class ColectivoActivo {
     garitaId: garitaId,
     latitud: latitud ?? this.latitud,
     longitud: longitud ?? this.longitud,
-    estado: estado ?? this.estado,
     recorridoId: clearRecorrido ? null : (recorridoId ?? this.recorridoId),
     recorridoNombre: clearRecorrido
         ? null

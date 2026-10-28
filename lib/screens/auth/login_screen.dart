@@ -30,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
 
   late UserRole _role = widget.initialRole;
+  int _conductor = 1;
   bool _submitting = false;
   String? _error;
 
@@ -69,6 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await AuthService.instance.signInColectivero(
           patente: _identifier.text,
           clave: _password.text,
+          conductor: _conductor,
         );
       } else {
         await AuthService.instance.signInAdministrador(
@@ -115,11 +117,17 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_isDriver)
+              if (_isDriver) ...[
                 PatenteField(
                   controller: _identifier,
                   textInputAction: TextInputAction.next,
-                )
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ConductorSlotSelector(
+                  value: _conductor,
+                  onChanged: (v) => setState(() => _conductor = v),
+                ),
+              ]
               else
                 EmailField(
                   controller: _identifier,

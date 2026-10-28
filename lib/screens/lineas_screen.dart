@@ -61,13 +61,15 @@ class _LineasScreenState extends State<LineasScreen> {
     MainNavigationController.instance.showMap();
   }
 
-  /// Las líneas a mostrar, filtradas por la búsqueda: con ubicación, de la más
-  /// cercana a la más lejana; sin ella, por nombre.
-  List<({Recorrido linea, double? metros, int enServicio})> _filas() {
+  /// Las líneas a mostrar, filtradas por la búsqueda y ordenadas por
+  /// [LinePlanner.priorizarLineas]: con ubicación, de la más cercana a la más
+  /// lejana (desempatando por el colectivo activo más próximo); sin ella, por
+  /// flota en servicio y nombre.
+  List<LineaPriorizada> _filas() {
     final posicion = _location.position;
     final query = _busqueda.text;
     final colectivos = _telemetria.state.value.colectivos;
-    final filas = [
+    final filtradas = [
       for (final linea in _recorridos.publicas)
         if (matchesAllTokens(query, [
           linea.nombre,
@@ -77,24 +79,13 @@ class _LineasScreenState extends State<LineasScreen> {
           ...linea.callesIda,
           ...linea.callesVuelta,
         ]))
-          (
-            linea: linea,
-            metros: posicion == null
-                ? null
-                : LinePlanner.metrosHasta(linea, posicion),
-            enServicio: colectivos
-                .where((c) => c.recorridoId == linea.id)
-                .length,
-          ),
+          linea,
     ];
-    if (posicion != null) {
-      filas.sort(
-        (a, b) => (a.metros ?? double.infinity).compareTo(
-          b.metros ?? double.infinity,
-        ),
-      );
-    }
-    return filas;
+    return LinePlanner.priorizarLineas(
+      lineas: filtradas,
+      colectivos: colectivos,
+      posicion: posicion,
+    );
   }
 
   @override
